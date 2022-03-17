@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"net/rpc"
 	"time"
 )
@@ -95,6 +96,61 @@ func (rf *Raft) start() {
 	}()
 }
 
+func (rf *Raft) RequestVote(args VoteArgs, reply *VoteReply) error {
+	if args.Term < rf.currentTerm {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+		return nil
+	}
+
+	if rf.votedFor == -1 {
+		rf.currentTerm = args.Term
+		rf.votedFor = args.CandidateID
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = true
+	}
+	return nil
+}
+
+func (rf *Raft) Heartbeat(args HeartbeatArgs, reply *HeartbeatReply) error {
+	if args.Term < rf.currentTerm {
+		reply.Success = false
+		reply.Term = rf.currentTerm
+		return nil
+	}
+	rf.heartbeatC <- true
+	if len(args.Entries) == 0 {
+		reply.Success = true
+		reply.Term = rf.currentTerm
+		return nil
+	}
+
+	if args.PrevLogIndex > rf.getLastIndex() {
+		reply.Success = false
+		reply.Term = rf.currentTerm
+		reply.NextIndex = rf.getLastIndex() + 1
+		return nil
+	}
+
+	rf.log = append(rf.log, args.Entries...)
+	rf.commitIndex = rf.getLastIndex()
+	reply.Success = true
+	reply.Term = rf.currentTerm
+	reply.NextIndex = rf.getLastIndex() + 1
+	return nil
+}
+
+func (rf *Raft) rpc(port string) {
+	rpc.Register(rf)
+	rpc.HandleHTTP()
+	go func() {
+		err := http.ListenAndServe(port, nil)
+		if err != nil {
+			log.Fatal("listen error: ", err)
+		}
+	}()
+}
+
 func (rf *Raft) sendRequestVote(serverID int, args VoteArgs, reply *VoteReply) {
 	client, err := rpc.DialHTTP("tcp", rf.nodes[serverID].address)
 	if err != nil {
@@ -135,7 +191,27 @@ func (rf *Raft) broadcastRequestVote() {
 }
 
 func (rf *Raft) sendHeartbeat(serverID int, args HeartbeatArgs, reply *HeartbeatReply) {
+	client, err := rpc.DialHTTP("tcp", rf.nodes[serverID].address)
+	if err != nil {
+		log.Fatal("dialing: ", err)
+	}
 
+	defer client.Close()
+	client.Call("Raft.Heartbeat", args, reply)
+
+	if reply.Success {
+		if reply.NextIndex > 0 {
+			rf.nextIndex[serverID] = reply.NextIndex
+			rf.matchIndex[serverID] = rf.nextIndex[serverID] - 1
+		}
+	} else {
+		if reply.Term > rf.currentTerm {
+			rf.currentTerm = reply.Term
+			rf.state = Follower
+			rf.votedFor = -1
+			return
+		}
+	}
 }
 
 func (rf *Raft) getLastIndex() int {
