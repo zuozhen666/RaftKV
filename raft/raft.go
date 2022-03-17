@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-type node struct {
+type Node struct {
 	connect bool
 	address string
 }
 
-func newNode(address string) *node {
-	node := &node{
+func NewNode(address string) *Node {
+	node := &Node{
 		address: address,
 	}
 	return node
@@ -23,7 +23,7 @@ func newNode(address string) *node {
 
 type Raft struct {
 	me          int
-	nodes       map[int]*node
+	nodes       map[int]*Node
 	state       State
 	currentTerm int
 	votedFor    int
@@ -37,7 +37,14 @@ type Raft struct {
 	toLeaderC   chan bool
 }
 
-func (rf *Raft) start() {
+func NewRaft(me int, nodes map[int]*Node) *Raft {
+	return &Raft{
+		me:    me,
+		nodes: nodes,
+	}
+}
+
+func (rf *Raft) Start() {
 	rf.state = Follower
 	rf.currentTerm = 0
 	rf.votedFor = -1
@@ -140,7 +147,7 @@ func (rf *Raft) Heartbeat(args HeartbeatArgs, reply *HeartbeatReply) error {
 	return nil
 }
 
-func (rf *Raft) rpc(port string) {
+func (rf *Raft) Rpc(port string) {
 	rpc.Register(rf)
 	rpc.HandleHTTP()
 	go func() {
