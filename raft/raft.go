@@ -116,6 +116,9 @@ func (rf *Raft) RequestVote(args VoteArgs, reply *VoteReply) error {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = true
 	}
+
+	reply.Term = rf.currentTerm
+	reply.VoteGranted = false
 	return nil
 }
 
