@@ -6,7 +6,7 @@ import (
 )
 
 type kvServer struct {
-	store map[string]string
+	store *kvstore
 }
 
 func (kv *kvServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -19,17 +19,16 @@ func (kv *kvServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed on PUT", http.StatusBadRequest)
 			return
 		}
-		kv.store[key] = string(v)
+		kv.store.Put(key, string(v))
 	case http.MethodGet:
-		if v, ok := kv.store[key]; ok {
+		if v, err := kv.store.Get(key); err == nil {
 			w.Write([]byte(v + "\n"))
 		} else {
 			http.Error(w, "Failed to GET", http.StatusNotFound)
 		}
 	case http.MethodDelete:
-		if v, ok := kv.store[key]; ok {
+		if v, err := kv.store.Delete(key); err == nil {
 			w.Write([]byte(v + "\n"))
-			delete(kv.store, key)
 		} else {
 			http.Error(w, "Key not Exist", http.StatusBadRequest)
 		}
@@ -39,14 +38,4 @@ func (kv *kvServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", http.MethodDelete)
 		http.Error(w, "Method nod Allowed", http.StatusMethodNotAllowed)
 	}
-}
-
-func main() {
-	httpServer := http.Server{
-		Addr: ":8080",
-		Handler: &kvServer{
-			store: make(map[string]string),
-		},
-	}
-	httpServer.ListenAndServe()
 }
