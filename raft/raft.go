@@ -20,8 +20,8 @@ type Raft struct {
 	nextIndex  []int // for each server, index of the next log entry to send to that server(initialized to leader last log index + 1)
 	matchIndex []int // for each server, index of highest log entry known to be replicated on server(intialized to 0, increases monotonically)
 
-	election chan bool
-	App      chan bool
+	election  chan bool
+	heartbeat chan bool
 }
 
 // rpc method: 处理RequestVote
@@ -83,11 +83,4 @@ func (r *Raft) broadcastRequestVote() {
 }
 
 func (r *Raft) broadcastHeartbeat() {
-	for _, nodeInfo := range global.GlobalInfo.Nodes {
-		if nodeInfo.Id != r.id {
-			go func(port string) {
-				r.sendHeartBeat(port)
-			}(nodeInfo.Port)
-		}
-	}
 }
