@@ -25,7 +25,10 @@ type entry struct {
 }
 
 type log struct {
-	// TODO:
+	Index int
+	Term  int
+	Key   string
+	Val   *string
 }
 
 type AppendEntriesArgs struct {
