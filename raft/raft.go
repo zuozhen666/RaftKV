@@ -55,8 +55,8 @@ type Raft struct {
 	Entry       []Entry
 	CommitIndex int
 	LastApplied int
-	NextIndex   []int
-	MathchIndex []int
+	NextIndex   map[string]int
+	MathchIndex map[string]int
 	Peers       []string
 
 	requestVoteFunc   func(peer string, request RequestVoteArgs) (RequestVoteRes, error)
@@ -73,9 +73,15 @@ func NewRaft(id string, peers []string,
 		ID:                    id,
 		Peers:                 peers,
 		State:                 Follower,
+		NextIndex:             make(map[string]int),
+		MathchIndex:           make(map[string]int),
 		requestVoteFunc:       requestVoteFunc,
 		appendEntriesFunc:     appendEntriesFunc,
 		restartElectionTicker: make(chan int),
+	}
+	for _, peer := range r.Peers {
+		r.NextIndex[peer] = 1
+		r.MathchIndex[peer] = 0
 	}
 	r.start()
 	return &r
@@ -157,21 +163,22 @@ func (r *Raft) startElection() {
 }
 
 func (r *Raft) sendHeartbeats() {
-	// TODO: log replication
 	if r.State != Leader {
 		return
 	}
 	for _, peer := range r.Peers {
-		appendEntriesArgs := AppendEntriesArgs{
-			Term:     r.CurrentTerm,
-			LeaderID: r.ID,
-		}
-		appendEntriesRes, err := r.appendEntriesFunc(peer, appendEntriesArgs)
-		if err != nil {
-			log.Printf("Append entries to peer %v err: %v\n", peer, err)
-		} else {
-			r.updateTermIfNeed(appendEntriesRes.Term)
-		}
+		go func(peer string) {
+			appendEntriesArgs := AppendEntriesArgs{
+				Term:     r.CurrentTerm,
+				LeaderID: r.ID,
+			}
+			appendEntriesRes, err := r.appendEntriesFunc(peer, appendEntriesArgs)
+			if err != nil {
+				log.Printf("Append entries to peer %v err: %v\n", peer, err)
+			} else {
+				r.updateTermIfNeed(appendEntriesRes.Term)
+			}
+		}(peer)
 	}
 }
 
@@ -232,6 +239,10 @@ func (r *Raft) convertToFollower() {
 func (r *Raft) convertToLeader() {
 	log.Printf("Node %s converting to Leader", r.ID)
 	r.State = Leader
+	for _, peer := range r.Peers {
+		r.NextIndex[peer] = r.getLastIndex() + 1
+		r.MathchIndex[peer] = 0
+	}
 	r.sendHeartbeats()
 }
 
