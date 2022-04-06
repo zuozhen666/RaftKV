@@ -113,29 +113,6 @@ func (r *Raft) startHeartbeatTicker() {
 	}()
 }
 
-func (r *Raft) sendHeartbeats() {
-	if r.State != Leader {
-		return
-	}
-	for _, peer := range r.Peers {
-		appendEntriesArgs := AppendEntriesArgs{}
-		appendEntriesRes, err := r.appendEntriesFunc(peer, appendEntriesArgs)
-		if err != nil {
-			log.Printf("Append entries to peer %v err: %v\n", peer, err)
-		} else {
-			r.updateTermIfNeed(appendEntriesRes.Term)
-		}
-	}
-}
-
-func (r *Raft) updateTermIfNeed(term int) {
-	if r.CurrentTerm < term {
-		log.Printf("Node %v update term %v to %v", r.ID, r.CurrentTerm, term)
-		r.CurrentTerm = term
-		r.convertToFollower()
-	}
-}
-
 func (r *Raft) handleElectionTimeout() {
 	if r.State == Leader {
 		return
@@ -151,7 +128,12 @@ func (r *Raft) startElection() {
 	r.VotedFor = r.ID
 	var votesGranted = 1
 	for _, peer := range r.Peers {
-		requestVoteArgs := RequestVoteArgs{}
+		requestVoteArgs := RequestVoteArgs{
+			Term:         r.CurrentTerm,
+			CandidateID:  r.ID,
+			LastLogIndex: r.getLastIndex(),
+			LastLogTerm:  r.getLastTerm(),
+		}
 		requestVoteRes, err := r.requestVoteFunc(peer, requestVoteArgs)
 		if err != nil {
 			log.Printf("Request vote to peer %v err: %v\n", peer, err)
@@ -171,6 +153,63 @@ func (r *Raft) startElection() {
 		r.convertToLeader()
 	} else {
 		log.Printf("Node %v loose election, get votes %v of %v", r.ID, votesGranted, peers)
+	}
+}
+
+func (r *Raft) sendHeartbeats() {
+	// TODO: log replication
+	if r.State != Leader {
+		return
+	}
+	for _, peer := range r.Peers {
+		appendEntriesArgs := AppendEntriesArgs{
+			Term:     r.CurrentTerm,
+			LeaderID: r.ID,
+		}
+		appendEntriesRes, err := r.appendEntriesFunc(peer, appendEntriesArgs)
+		if err != nil {
+			log.Printf("Append entries to peer %v err: %v\n", peer, err)
+		} else {
+			r.updateTermIfNeed(appendEntriesRes.Term)
+		}
+	}
+}
+
+func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes {
+	r.updateTermIfNeed(requestVoteArgs.Term)
+	var requestVoteRes = RequestVoteRes{
+		Term: r.CurrentTerm,
+	}
+	if r.VotedFor == "" && r.CurrentTerm < requestVoteArgs.Term && r.getLastIndex() <= requestVoteArgs.LastLogIndex && r.getLastTerm() <= requestVoteArgs.LastLogTerm {
+		r.VotedFor = requestVoteArgs.CandidateID
+		requestVoteRes.VoteGranted = true
+		r.resetElectionTimer()
+		return requestVoteRes
+	}
+	requestVoteRes.VoteGranted = false
+	return requestVoteRes
+}
+
+func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEntriesRes {
+	r.updateTermIfNeed(appendEntriesArgs.Term)
+	r.resetElectionTimer()
+	// TODO: log replication
+	var appendEntriesRes = AppendEntriesRes{
+		Term: r.CurrentTerm,
+	}
+	if r.CurrentTerm > appendEntriesArgs.Term {
+		appendEntriesRes.Success = false
+	} else {
+		appendEntriesRes.Success = true
+	}
+	return appendEntriesRes
+}
+
+func (r *Raft) updateTermIfNeed(term int) {
+	if r.CurrentTerm < term {
+		log.Printf("Node %v update term %v to %v", r.ID, r.CurrentTerm, term)
+		r.CurrentTerm = term
+		r.convertToFollower()
 	}
 }
 
@@ -196,10 +235,18 @@ func (r *Raft) convertToLeader() {
 	r.sendHeartbeats()
 }
 
-func (r *Raft) HandleRequestVote(RequestVoteArgs) RequestVoteRes {
-	return RequestVoteRes{}
+func (r *Raft) getLastIndex() int {
+	l := len(r.Entry)
+	if l == 0 {
+		return -1
+	}
+	return r.Entry[l-1].Index
 }
 
-func (r *Raft) HandleAppendEntries(AppendEntriesArgs) AppendEntriesRes {
-	return AppendEntriesRes{}
+func (r *Raft) getLastTerm() int {
+	l := len(r.Entry)
+	if l == 0 {
+		return -1
+	}
+	return r.Entry[l-1].Term
 }
