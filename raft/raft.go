@@ -168,18 +168,33 @@ func (r *Raft) sendHeartbeats() {
 	}
 	for _, peer := range r.Peers {
 		go func(peer string) {
-			appendEntriesArgs := AppendEntriesArgs{
+			var appendEntriesArgs = AppendEntriesArgs{
 				Term:     r.CurrentTerm,
 				LeaderID: r.ID,
 			}
-			appendEntriesRes, err := r.appendEntriesFunc(peer, appendEntriesArgs)
-			if err != nil {
-				log.Printf("Append entries to peer %v err: %v\n", peer, err)
-			} else {
+			var appendEntriesRes AppendEntriesRes
+			if r.MathchIndex[peer] == r.getLastIndex() {
+				// just heartbeat, not append entries
+				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
 				r.updateTermIfNeed(appendEntriesRes.Term)
+			} else {
+				r.buildAppendEntriesArgs(&appendEntriesArgs, r.NextIndex[peer])
+				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
+				for !appendEntriesRes.Success {
+					r.NextIndex[peer]--
+					r.buildAppendEntriesArgs(&appendEntriesArgs, r.NextIndex[peer])
+					appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
+				}
+				r.MathchIndex[peer] = r.NextIndex[peer] - 1
 			}
 		}(peer)
 	}
+}
+
+func (r *Raft) buildAppendEntriesArgs(appendEntriesArgs *AppendEntriesArgs, nextIndex int) {
+	appendEntriesArgs.Entries = r.Entry[nextIndex:]
+	appendEntriesArgs.PrevLogIndex = r.Entry[nextIndex-1].Index
+	appendEntriesArgs.PrevLogTerm = r.Entry[nextIndex-1].Term
 }
 
 func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes {
