@@ -174,7 +174,6 @@ func (r *Raft) sendHeartbeats() {
 			}
 			var appendEntriesRes AppendEntriesRes
 			if r.MathchIndex[peer] == r.getLastIndex() {
-				// just heartbeat, not append entries
 				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
 				r.updateTermIfNeed(appendEntriesRes.Term)
 			} else {
