@@ -191,9 +191,9 @@ func (r *Raft) sendHeartbeats() {
 }
 
 func (r *Raft) buildAppendEntriesArgs(appendEntriesArgs *AppendEntriesArgs, nextIndex int) {
-	appendEntriesArgs.Entries = r.Entry[nextIndex:]
-	appendEntriesArgs.PrevLogIndex = r.Entry[nextIndex-1].Index
-	appendEntriesArgs.PrevLogTerm = r.Entry[nextIndex-1].Term
+	appendEntriesArgs.PrevLogIndex = r.Entry[nextIndex-2].Index
+	appendEntriesArgs.PrevLogTerm = r.Entry[nextIndex-2].Term
+	appendEntriesArgs.Entries = r.Entry[:appendEntriesArgs.PrevLogIndex]
 }
 
 func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes {
@@ -214,16 +214,28 @@ func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes
 func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEntriesRes {
 	r.updateTermIfNeed(appendEntriesArgs.Term)
 	r.resetElectionTimer()
-	// TODO: log replication
 	var appendEntriesRes = AppendEntriesRes{
 		Term: r.CurrentTerm,
 	}
-	if r.CurrentTerm > appendEntriesArgs.Term {
-		appendEntriesRes.Success = false
-	} else {
-		appendEntriesRes.Success = true
+	if appendEntriesArgs.Entries == nil {
+		appendEntriesRes.Success = r.CurrentTerm <= appendEntriesArgs.Term
+		return appendEntriesRes
 	}
+	if !r.isMatch(appendEntriesArgs.PrevLogIndex, appendEntriesArgs.PrevLogTerm) {
+		appendEntriesRes.Success = false
+		return appendEntriesRes
+	}
+	r.Entry = append(r.Entry[:appendEntriesArgs.PrevLogIndex], appendEntriesArgs.Entries...)
 	return appendEntriesRes
+}
+
+func (r *Raft) isMatch(prevLogIndex, prevLogTerm int) bool {
+	for _, entry := range r.Entry {
+		if prevLogIndex == entry.Index && prevLogTerm == entry.Term {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Raft) updateTermIfNeed(term int) {
