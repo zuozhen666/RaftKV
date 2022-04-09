@@ -12,7 +12,7 @@ type RaftClient struct {
 	httpClient http.Client
 }
 
-func NewClient() *RaftClient {
+func NewRaftClient() *RaftClient {
 	return &RaftClient{
 		httpClient: http.Client{
 			Timeout: time.Millisecond * 500,
