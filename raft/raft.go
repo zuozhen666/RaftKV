@@ -94,11 +94,14 @@ func (r *Raft) start() {
 }
 
 func (r *Raft) startElectionTicker() {
-	electionTicker := time.NewTicker(time.Duration(rand.Int()%1000+4000) * time.Millisecond)
+	randInt := rand.Int()%1000 + 4000
+	electionTicker := time.NewTicker(time.Duration(randInt) * time.Millisecond)
+	log.Printf("reset electionTimeout: %v Millisecond\n", randInt)
 	go func() {
 		for {
 			select {
 			case <-electionTicker.C:
+				log.Printf("Node %v election time out\n", r.ID)
 				r.handleElectionTimeout()
 			case <-r.restartElectionTicker:
 				go r.startElectionTicker()
@@ -178,6 +181,7 @@ func (r *Raft) sendHeartbeats() {
 			lastIndex := r.getLastIndex()
 			if r.MathchIndex[peer] == lastIndex || lastIndex == -1 {
 				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
+				log.Printf("Node %v appendEntries to Node %v\n", r.ID, peer)
 				r.updateTermIfNeed(appendEntriesRes.Term)
 			} else {
 				r.buildAppendEntriesArgs(&appendEntriesArgs, r.NextIndex[peer])
@@ -216,6 +220,7 @@ func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes
 
 func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEntriesRes {
 	r.updateTermIfNeed(appendEntriesArgs.Term)
+	log.Printf("Node: %v receive appendEntriesMsg from Node: %v\n", r.ID, appendEntriesArgs.LeaderID)
 	r.resetElectionTimer()
 	var appendEntriesRes = AppendEntriesRes{
 		Term: r.CurrentTerm,

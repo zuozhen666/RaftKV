@@ -3,7 +3,6 @@ package raft
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 )
 

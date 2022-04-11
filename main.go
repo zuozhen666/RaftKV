@@ -2,7 +2,6 @@ package main
 
 import (
 	"RaftKV/raft"
-	"fmt"
 	"os"
 )
 
@@ -19,7 +18,6 @@ func main() {
 		panic("args not fail")
 	}
 	client := raft.NewRaftClient()
-	fmt.Printf("receive args, args[0] = %v, args[1:] = %v\n", args[0], args[1:])
 	r := raft.NewRaft(args[0], args[1:], client.RequestVote, client.AppendEntries)
 	server := raft.NewRaftServer(r)
 	server.Start(args[0])
