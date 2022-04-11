@@ -73,11 +73,12 @@ func NewRaft(id string, peers []string,
 		ID:                    id,
 		Peers:                 peers,
 		State:                 Follower,
+		VotedFor:				"",
 		NextIndex:             make(map[string]int),
 		MathchIndex:           make(map[string]int),
 		requestVoteFunc:       requestVoteFunc,
 		appendEntriesFunc:     appendEntriesFunc,
-		restartElectionTicker: make(chan int),
+		restartElectionTicker: make(chan int, 1),
 	}
 	for _, peer := range r.Peers {
 		r.NextIndex[peer] = 1
@@ -144,6 +145,7 @@ func (r *Raft) startElection() {
 		if err != nil {
 			log.Printf("Request vote to peer %v err: %v\n", peer, err)
 		} else {
+			log.Printf("CurrentTerm = %v, reveiceRes = %v\n", r.CurrentTerm, requestVoteRes)
 			r.updateTermIfNeed(requestVoteRes.Term)
 			if r.State != Candidate {
 				return
@@ -173,7 +175,8 @@ func (r *Raft) sendHeartbeats() {
 				LeaderID: r.ID,
 			}
 			var appendEntriesRes AppendEntriesRes
-			if r.MathchIndex[peer] == r.getLastIndex() {
+			lastIndex := r.getLastIndex()
+			if r.MathchIndex[peer] == lastIndex || lastIndex == -1 {
 				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
 				r.updateTermIfNeed(appendEntriesRes.Term)
 			} else {
@@ -201,7 +204,7 @@ func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes
 	var requestVoteRes = RequestVoteRes{
 		Term: r.CurrentTerm,
 	}
-	if r.VotedFor == "" && r.CurrentTerm < requestVoteArgs.Term && r.getLastIndex() <= requestVoteArgs.LastLogIndex && r.getLastTerm() <= requestVoteArgs.LastLogTerm {
+	if r.VotedFor == "" && r.CurrentTerm <= requestVoteArgs.Term && r.getLastIndex() <= requestVoteArgs.LastLogIndex && r.getLastTerm() <= requestVoteArgs.LastLogTerm {
 		r.VotedFor = requestVoteArgs.CandidateID
 		requestVoteRes.VoteGranted = true
 		r.resetElectionTimer()

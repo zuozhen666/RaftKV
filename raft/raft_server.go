@@ -20,14 +20,7 @@ func NewRaftServer(r *Raft) *RaftServer {
 func (s *RaftServer) Start(listenAddr string) {
 	http.HandleFunc("/raft/request-vote", s.HandleRequestVote)
 	http.HandleFunc("/raft/append-entries", s.HandleAppendEntries)
-	log.Fatal(http.ListenAndServe(listenAddr, logRequest(http.DefaultServeMux)))
-}
-
-func logRequest(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
-		handler.ServeHTTP(w, r)
-	})
+	http.ListenAndServe(listenAddr, nil)
 }
 
 func (s *RaftServer) HandleRequestVote(writer http.ResponseWriter, request *http.Request) {

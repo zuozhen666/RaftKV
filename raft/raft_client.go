@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 )
@@ -23,6 +24,9 @@ func NewRaftClient() *RaftClient {
 func (c *RaftClient) AppendEntries(peer string, appendEntriesArgs AppendEntriesArgs) (AppendEntriesRes, error) {
 	reqJson, _ := json.Marshal(appendEntriesArgs)
 	res, err := c.httpClient.Post("http://"+peer+"/raft/append-entries", "application/json", bytes.NewBuffer(reqJson))
+	if err != nil {
+		log.Printf("AppendEntries to Node %v http post error: %v", peer, err)
+	}
 	var appendEntriesRes = AppendEntriesRes{}
 	if err != nil || res.StatusCode != 200 {
 		return appendEntriesRes, err
@@ -38,6 +42,9 @@ func (c *RaftClient) AppendEntries(peer string, appendEntriesArgs AppendEntriesA
 func (c *RaftClient) RequestVote(peer string, requestVoteArgs RequestVoteArgs) (RequestVoteRes, error) {
 	reqJson, _ := json.Marshal(requestVoteArgs)
 	res, err := c.httpClient.Post("http://"+peer+"/raft/request-vote", "application/json", bytes.NewBuffer(reqJson))
+	if err != nil {
+		log.Printf("RequestVote to Node %v http post error: %v", peer, err)
+	}
 	var requestVoteRes = RequestVoteRes{}
 	if err != nil || res.StatusCode != 200 {
 		return requestVoteRes, err
