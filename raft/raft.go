@@ -20,7 +20,7 @@ type Entry struct {
 	Term  int    `json:"term"`
 	Key   string `json:"key"`
 	Value string `json:"val"`
-	Op    string `json:"op`
+	Op    string `json:"op"`
 }
 
 type RequestVoteArgs struct {
