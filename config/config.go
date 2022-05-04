@@ -5,3 +5,10 @@ type Kv struct {
 	Val string
 	Op  string
 }
+
+type cluster struct {
+	LiveNum  int
+	LeaderID string
+}
+
+var ClusterMeta cluster

@@ -66,7 +66,7 @@ type Raft struct {
 
 	restartElectionTicker chan int
 	proposeC              <-chan config.Kv
-	conmmitC              chan<- config.Kv
+	commitC               chan<- config.Kv
 	ptr                   int
 }
 
@@ -86,7 +86,7 @@ func NewRaft(id string, peers []string, proposeC <-chan config.Kv, commitC chan<
 		appendEntriesFunc:     appendEntriesFunc,
 		restartElectionTicker: make(chan int, 1),
 		proposeC:              proposeC,
-		conmmitC:              commitC,
+		commitC:               commitC,
 		ptr:                   -1,
 	}
 	for _, peer := range r.Peers {
@@ -100,7 +100,8 @@ func NewRaft(id string, peers []string, proposeC <-chan config.Kv, commitC chan<
 func (r *Raft) start() {
 	r.startElectionTicker()
 	r.startHeartbeatTicker()
-	r.readPropose()
+	go r.readPropose()
+	r.commitCycle()
 }
 
 func (r *Raft) readPropose() {
@@ -114,6 +115,18 @@ func (r *Raft) readPropose() {
 		})
 		r.ptr++
 	}
+}
+
+func (r *Raft) commitCycle() {
+	commitTicker := time.NewTicker(1 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-commitTicker.C:
+
+			}
+		}
+	}()
 }
 
 func (r *Raft) startElectionTicker() {
