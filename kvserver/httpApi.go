@@ -1,15 +1,15 @@
-package main
+package kvserver
 
 import (
 	"io"
 	"net/http"
 )
 
-type kvServer struct {
-	store *kvstore
+type KvServer struct {
+	Store *KvStore
 }
 
-func (kv *kvServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (kv *KvServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := r.RequestURI
 	defer r.Body.Close()
 	switch r.Method {
@@ -19,19 +19,15 @@ func (kv *kvServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed on PUT", http.StatusBadRequest)
 			return
 		}
-		kv.store.Put(key, string(v))
+		kv.Store.Put(key, string(v))
 	case http.MethodGet:
-		if v, err := kv.store.Get(key); err == nil {
+		if v, err := kv.Store.Get(key); err == nil {
 			w.Write([]byte(v + "\n"))
 		} else {
 			http.Error(w, "Failed to GET", http.StatusNotFound)
 		}
 	case http.MethodDelete:
-		if v, err := kv.store.Delete(key); err == nil {
-			w.Write([]byte(v + "\n"))
-		} else {
-			http.Error(w, "Key not Exist", http.StatusBadRequest)
-		}
+		kv.Store.Delete(key)
 	default:
 		w.Header().Set("Allow", http.MethodPut)
 		w.Header().Set("Allow", http.MethodGet)

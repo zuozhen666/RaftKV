@@ -1,6 +1,8 @@
 package main
 
 import (
+	"RaftKV/config"
+	"RaftKV/kvserver"
 	"RaftKV/raft"
 	"net/http"
 	"os"
@@ -11,10 +13,12 @@ func main() {
 	if len(args) < 1 {
 		panic("args not fail")
 	}
+	proposeC := make(chan config.Kv)
+	commitC := make(chan config.Kv)
 	httpServer := &http.Server{
 		Addr: args[0],
-		Handler: &kvServer{
-			store: NewKvStore(),
+		Handler: &kvserver.KvServer{
+			Store: kvserver.NewKvStore(proposeC, commitC),
 		},
 	}
 	httpServer.ListenAndServe()
