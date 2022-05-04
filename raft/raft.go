@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"RaftKV/config"
 	"log"
 	"math/rand"
 	"time"
@@ -19,6 +20,7 @@ type Entry struct {
 	Term  int    `json:"term"`
 	Key   string `json:"key"`
 	Value string `json:"val"`
+	Op    string `json:"op`
 }
 
 type RequestVoteArgs struct {
@@ -63,9 +65,12 @@ type Raft struct {
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error)
 
 	restartElectionTicker chan int
+	proposeC              <-chan config.Kv
+	conmmitC              chan<- config.Kv
+	ptr                   int
 }
 
-func NewRaft(id string, peers []string,
+func NewRaft(id string, peers []string, proposeC <-chan config.Kv, commitC chan<- config.Kv,
 	requestVoteFunc func(peer string, request RequestVoteArgs) (RequestVoteRes, error),
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error),
 ) *Raft {
@@ -73,12 +78,16 @@ func NewRaft(id string, peers []string,
 		ID:                    id,
 		Peers:                 peers,
 		State:                 Follower,
-		VotedFor:				"",
+		VotedFor:              "",
+		Entry:                 make([]Entry, 0),
 		NextIndex:             make(map[string]int),
 		MathchIndex:           make(map[string]int),
 		requestVoteFunc:       requestVoteFunc,
 		appendEntriesFunc:     appendEntriesFunc,
 		restartElectionTicker: make(chan int, 1),
+		proposeC:              proposeC,
+		conmmitC:              commitC,
+		ptr:                   -1,
 	}
 	for _, peer := range r.Peers {
 		r.NextIndex[peer] = 1
@@ -91,6 +100,20 @@ func NewRaft(id string, peers []string,
 func (r *Raft) start() {
 	r.startElectionTicker()
 	r.startHeartbeatTicker()
+	r.readPropose()
+}
+
+func (r *Raft) readPropose() {
+	for propose := range r.proposeC {
+		r.Entry = append(r.Entry, Entry{
+			Index: r.ptr + 1,
+			Term:  r.CurrentTerm,
+			Key:   propose.Key,
+			Value: propose.Val,
+			Op:    propose.Op,
+		})
+		r.ptr++
+	}
 }
 
 func (r *Raft) startElectionTicker() {

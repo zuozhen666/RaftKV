@@ -23,7 +23,7 @@ func main() {
 	}
 	httpServer.ListenAndServe()
 	client := raft.NewRaftClient()
-	r := raft.NewRaft(args[1], args[2:], client.RequestVote, client.AppendEntries)
+	r := raft.NewRaft(args[1], args[2:], proposeC, commitC, client.RequestVote, client.AppendEntries)
 	server := raft.NewRaftServer(r)
 	server.Start(args[1])
 }
