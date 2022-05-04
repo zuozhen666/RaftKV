@@ -117,13 +117,35 @@ func (r *Raft) readPropose() {
 	}
 }
 
+func (r *Raft) commit(lastCommitIndex int) {
+	for lastCommitIndex < r.CommitIndex {
+		r.commitC <- config.Kv{
+			Key: r.Entry[lastCommitIndex+1].Key,
+			Val: r.Entry[lastCommitIndex+1].Value,
+			Op:  r.Entry[lastCommitIndex+1].Op,
+		}
+		lastCommitIndex++
+	}
+}
+
 func (r *Raft) commitCycle() {
 	commitTicker := time.NewTicker(1 * time.Second)
 	go func() {
 		for {
 			select {
 			case <-commitTicker.C:
-
+				if r.State == Leader {
+					count := 0
+					for _, index := range r.MathchIndex {
+						if index >= r.CommitIndex+1 {
+							count++
+						}
+					}
+					if count > config.ClusterMeta.LiveNum/2 {
+						r.CommitIndex++
+						r.commit(r.CommitIndex - 1)
+					}
+				}
 			}
 		}
 	}()
@@ -194,12 +216,11 @@ func (r *Raft) startElection() {
 			}
 		}
 	}
-	peers := len(r.Peers) + 1
-	if votesGranted > peers/2 {
-		log.Printf("Node %v granted majority of votes %v of %v", r.ID, votesGranted, peers)
+	if votesGranted > config.ClusterMeta.LiveNum/2 {
+		log.Printf("Node %v granted majority of votes %v of %v", r.ID, votesGranted, config.ClusterMeta.LiveNum)
 		r.convertToLeader()
 	} else {
-		log.Printf("Node %v loose election, get votes %v of %v", r.ID, votesGranted, peers)
+		log.Printf("Node %v loose election, get votes %v of %v", r.ID, votesGranted, config.ClusterMeta.LiveNum)
 	}
 }
 
@@ -270,7 +291,16 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 		return appendEntriesRes
 	}
 	r.Entry = append(r.Entry[:appendEntriesArgs.PrevLogIndex], appendEntriesArgs.Entries...)
+	r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
 	return appendEntriesRes
+}
+
+func (r *Raft) updateCommitIndexIfNeed(leaderCommit int) {
+	if r.getLastIndex() >= leaderCommit {
+		lastCommitIndex := r.CommitIndex
+		r.CommitIndex = leaderCommit
+		r.commit(lastCommitIndex)
+	}
 }
 
 func (r *Raft) isMatch(prevLogIndex, prevLogTerm int) bool {
