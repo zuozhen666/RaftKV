@@ -80,6 +80,7 @@ func NewRaft(id string, peers []string, proposeC <-chan config.Kv, commitC chan<
 		State:                 Follower,
 		VotedFor:              "",
 		Entry:                 make([]Entry, 0),
+		CommitIndex:           -1,
 		NextIndex:             make(map[string]int),
 		MathchIndex:           make(map[string]int),
 		requestVoteFunc:       requestVoteFunc,
@@ -136,8 +137,11 @@ func (r *Raft) commitCycle() {
 			case <-commitTicker.C:
 				if r.State == Leader {
 					if config.ClusterMeta.LiveNum == 1 {
-						r.CommitIndex++
-						r.commit(r.CommitIndex - 1)
+						if r.getLastIndex() > r.CommitIndex {
+							lastCommitIndex := r.CommitIndex
+							r.CommitIndex = r.getLastIndex()
+							r.commit(lastCommitIndex)
+						}
 					} else {
 						count := 0
 						for _, index := range r.MathchIndex {
