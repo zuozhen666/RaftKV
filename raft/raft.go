@@ -59,7 +59,6 @@ type Raft struct {
 	LastApplied int
 	NextIndex   map[string]int
 	MathchIndex map[string]int
-	Peers       []string
 
 	requestVoteFunc   func(peer string, request RequestVoteArgs) (RequestVoteRes, error)
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error)
@@ -70,13 +69,12 @@ type Raft struct {
 	ptr                   int
 }
 
-func NewRaft(id string, peers []string, proposeC <-chan global.Kv, commitC chan<- global.Kv,
+func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv,
 	requestVoteFunc func(peer string, request RequestVoteArgs) (RequestVoteRes, error),
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error),
 ) *Raft {
 	r := Raft{
 		ID:                    id,
-		Peers:                 peers,
 		State:                 Follower,
 		VotedFor:              "",
 		Entry:                 make([]Entry, 0),
@@ -90,7 +88,7 @@ func NewRaft(id string, peers []string, proposeC <-chan global.Kv, commitC chan<
 		commitC:               commitC,
 		ptr:                   -1,
 	}
-	for _, peer := range r.Peers {
+	for _, peer := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = 0
 		r.MathchIndex[peer] = -1
 	}
@@ -205,7 +203,7 @@ func (r *Raft) startElection() {
 	r.CurrentTerm++
 	r.VotedFor = r.ID
 	var votesGranted = 1
-	for _, peer := range r.Peers {
+	for _, peer := range global.ClusterMeta.OtherPeers {
 		requestVoteArgs := RequestVoteArgs{
 			Term:         r.CurrentTerm,
 			CandidateID:  r.ID,
@@ -238,7 +236,7 @@ func (r *Raft) sendHeartbeats() {
 	if r.State != Leader {
 		return
 	}
-	for _, peer := range r.Peers {
+	for _, peer := range global.ClusterMeta.OtherPeers {
 		go func(peer string) {
 			var appendEntriesArgs = AppendEntriesArgs{
 				Term:         r.CurrentTerm,
@@ -329,7 +327,7 @@ func (r *Raft) updateCommitIndexIfNeed(leaderCommit int) {
 	if r.getLastIndex() != -1 && r.getLastIndex() >= leaderCommit && r.CommitIndex != leaderCommit {
 		lastCommitIndex := r.CommitIndex
 		r.CommitIndex = leaderCommit
-		log.Printf("[raft module]Node %v update commitIndex %d to %d", r.ID, r.CommitIndex, leaderCommit)
+		log.Printf("[raft module]Node %v update commitIndex %d to %d", r.ID, lastCommitIndex, leaderCommit)
 		r.commit(lastCommitIndex)
 	}
 }
@@ -370,7 +368,7 @@ func (r *Raft) convertToFollower() {
 func (r *Raft) convertToLeader() {
 	log.Printf("[raft module]Node %s converting to Leader", r.ID)
 	r.State = Leader
-	for _, peer := range r.Peers {
+	for _, peer := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = r.getLastIndex() + 1
 		r.MathchIndex[peer] = -1
 	}
