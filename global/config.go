@@ -1,4 +1,4 @@
-package config
+package global
 
 type Kv struct {
 	Key string

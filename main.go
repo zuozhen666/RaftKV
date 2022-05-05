@@ -1,7 +1,7 @@
 package main
 
 import (
-	"RaftKV/config"
+	"RaftKV/global"
 	"RaftKV/kvserver"
 	"RaftKV/raft"
 	"log"
@@ -14,8 +14,8 @@ func main() {
 	if len(args) < 1 {
 		panic("args not fail")
 	}
-	proposeC := make(chan config.Kv)
-	commitC := make(chan config.Kv)
+	proposeC := make(chan global.Kv)
+	commitC := make(chan global.Kv)
 	// kv server
 	httpServer := &http.Server{
 		Addr: args[0],
@@ -25,7 +25,7 @@ func main() {
 	}
 	go httpServer.ListenAndServe()
 	// raft node
-	config.ClusterMeta.LiveNum = len(args[1:])
+	global.ClusterMeta.LiveNum = len(args[1:])
 	log.Printf("Cluster Live node: %v", args[1:])
 	client := raft.NewRaftClient()
 	r := raft.NewRaft(args[1], args[2:], proposeC, commitC, client.RequestVote, client.AppendEntries)

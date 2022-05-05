@@ -1,7 +1,7 @@
 package raft
 
 import (
-	"RaftKV/config"
+	"RaftKV/global"
 	"log"
 	"math/rand"
 	"time"
@@ -65,12 +65,12 @@ type Raft struct {
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error)
 
 	restartElectionTicker chan int
-	proposeC              <-chan config.Kv
-	commitC               chan<- config.Kv
+	proposeC              <-chan global.Kv
+	commitC               chan<- global.Kv
 	ptr                   int
 }
 
-func NewRaft(id string, peers []string, proposeC <-chan config.Kv, commitC chan<- config.Kv,
+func NewRaft(id string, peers []string, proposeC <-chan global.Kv, commitC chan<- global.Kv,
 	requestVoteFunc func(peer string, request RequestVoteArgs) (RequestVoteRes, error),
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error),
 ) *Raft {
@@ -107,6 +107,7 @@ func (r *Raft) start() {
 
 func (r *Raft) readPropose() {
 	for propose := range r.proposeC {
+		log.Printf("[raft module]receive new propose %v", propose)
 		r.Entry = append(r.Entry, Entry{
 			Index: r.ptr + 1,
 			Term:  r.CurrentTerm,
@@ -119,8 +120,9 @@ func (r *Raft) readPropose() {
 }
 
 func (r *Raft) commit(lastCommitIndex int) {
+	log.Printf("raft module reach a consensus, commit %v", r.Entry[lastCommitIndex+1:r.CommitIndex])
 	for lastCommitIndex < r.CommitIndex {
-		r.commitC <- config.Kv{
+		r.commitC <- global.Kv{
 			Key: r.Entry[lastCommitIndex+1].Key,
 			Val: r.Entry[lastCommitIndex+1].Value,
 			Op:  r.Entry[lastCommitIndex+1].Op,
@@ -136,7 +138,7 @@ func (r *Raft) commitCycle() {
 			select {
 			case <-commitTicker.C:
 				if r.State == Leader {
-					if config.ClusterMeta.LiveNum == 1 {
+					if global.ClusterMeta.LiveNum == 1 {
 						if r.getLastIndex() > r.CommitIndex {
 							lastCommitIndex := r.CommitIndex
 							r.CommitIndex = r.getLastIndex()
@@ -149,7 +151,7 @@ func (r *Raft) commitCycle() {
 								count++
 							}
 						}
-						if count >= config.ClusterMeta.LiveNum/2 {
+						if count >= global.ClusterMeta.LiveNum/2 {
 							r.CommitIndex++
 							r.commit(r.CommitIndex - 1)
 						}
@@ -225,11 +227,11 @@ func (r *Raft) startElection() {
 			}
 		}
 	}
-	if votesGranted > config.ClusterMeta.LiveNum/2 {
-		log.Printf("Node %v granted majority of votes %v of %v", r.ID, votesGranted, config.ClusterMeta.LiveNum)
+	if votesGranted > global.ClusterMeta.LiveNum/2 {
+		log.Printf("Node %v granted majority of votes %v of %v", r.ID, votesGranted, global.ClusterMeta.LiveNum)
 		r.convertToLeader()
 	} else {
-		log.Printf("Node %v loose election, get votes %v of %v", r.ID, votesGranted, config.ClusterMeta.LiveNum)
+		log.Printf("Node %v loose election, get votes %v of %v", r.ID, votesGranted, global.ClusterMeta.LiveNum)
 	}
 }
 

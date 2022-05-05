@@ -1,17 +1,18 @@
 package kvserver
 
 import (
-	"RaftKV/config"
+	"RaftKV/global"
 	"errors"
+	"log"
 )
 
 type KvStore struct {
 	data     map[string]string
-	proposeC chan<- config.Kv
-	commitC  <-chan config.Kv
+	proposeC chan<- global.Kv
+	commitC  <-chan global.Kv
 }
 
-func NewKvStore(proposeC chan<- config.Kv, commitC <-chan config.Kv) *KvStore {
+func NewKvStore(proposeC chan<- global.Kv, commitC <-chan global.Kv) *KvStore {
 	kv := &KvStore{
 		data:     make(map[string]string),
 		proposeC: proposeC,
@@ -33,11 +34,16 @@ func (kv *KvStore) readCommit() {
 }
 
 func (kv *KvStore) Put(key, value string) {
-	kv.proposeC <- config.Kv{
+	kv.proposeC <- global.Kv{
 		Key: key,
 		Val: value,
 		Op:  "put",
 	}
+	log.Printf("propose %v to raft module", global.Kv{
+		Key: key,
+		Val: value,
+		Op:  "put",
+	})
 }
 
 func (kv *KvStore) Get(key string) (string, error) {
@@ -48,7 +54,7 @@ func (kv *KvStore) Get(key string) (string, error) {
 }
 
 func (kv *KvStore) Delete(key string) {
-	kv.proposeC <- config.Kv{
+	kv.proposeC <- global.Kv{
 		Key: key,
 		Op:  "delete",
 	}
