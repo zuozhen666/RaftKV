@@ -4,6 +4,7 @@ import (
 	"RaftKV/config"
 	"RaftKV/kvserver"
 	"RaftKV/raft"
+	"log"
 	"net/http"
 	"os"
 )
@@ -21,9 +22,11 @@ func main() {
 			Store: kvserver.NewKvStore(proposeC, commitC),
 		},
 	}
-	httpServer.ListenAndServe()
+	err := httpServer.ListenAndServe()
+	log.Println(err)
 	client := raft.NewRaftClient()
 	config.ClusterMeta.LiveNum = len(args[1:])
+	log.Printf("Cluster Live node: %v", args[1:])
 	r := raft.NewRaft(args[1], args[2:], proposeC, commitC, client.RequestVote, client.AppendEntries)
 	server := raft.NewRaftServer(r)
 	server.Start(args[1])
