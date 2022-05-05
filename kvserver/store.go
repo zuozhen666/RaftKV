@@ -24,6 +24,7 @@ func NewKvStore(proposeC chan<- global.Kv, commitC <-chan global.Kv) *KvStore {
 
 func (kv *KvStore) readCommit() {
 	for commit := range kv.commitC {
+		log.Printf("[kvserver]receive commit request %v from raft module", commit)
 		switch commit.Op {
 		case "put":
 			kv.data[commit.Key] = commit.Val
@@ -34,16 +35,13 @@ func (kv *KvStore) readCommit() {
 }
 
 func (kv *KvStore) Put(key, value string) {
-	kv.proposeC <- global.Kv{
+	propose := global.Kv{
 		Key: key,
 		Val: value,
 		Op:  "put",
 	}
-	log.Printf("propose %v to raft module", global.Kv{
-		Key: key,
-		Val: value,
-		Op:  "put",
-	})
+	kv.proposeC <- propose
+	log.Printf("[kvserver]propose %v to raft module", propose)
 }
 
 func (kv *KvStore) Get(key string) (string, error) {
@@ -54,8 +52,10 @@ func (kv *KvStore) Get(key string) (string, error) {
 }
 
 func (kv *KvStore) Delete(key string) {
-	kv.proposeC <- global.Kv{
+	propose := global.Kv{
 		Key: key,
 		Op:  "delete",
 	}
+	kv.proposeC <- propose
+	log.Printf("[kvserver]propose %v to raft module", propose)
 }

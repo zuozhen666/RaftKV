@@ -107,7 +107,7 @@ func (r *Raft) start() {
 
 func (r *Raft) readPropose() {
 	for propose := range r.proposeC {
-		log.Printf("[raft module]receive new propose %v", propose)
+		log.Printf("[raft module]receive propose request %v from kvserver", propose)
 		r.Entry = append(r.Entry, Entry{
 			Index: r.ptr + 1,
 			Term:  r.CurrentTerm,
@@ -120,7 +120,7 @@ func (r *Raft) readPropose() {
 }
 
 func (r *Raft) commit(lastCommitIndex int) {
-	log.Printf("raft module reach a consensus, commit %v", r.Entry[lastCommitIndex+1:r.CommitIndex])
+	log.Printf("[raft module]reach a consensus, commit %v", r.Entry[lastCommitIndex+1:r.CommitIndex+1])
 	for lastCommitIndex < r.CommitIndex {
 		r.commitC <- global.Kv{
 			Key: r.Entry[lastCommitIndex+1].Key,
