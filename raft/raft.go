@@ -135,15 +135,20 @@ func (r *Raft) commitCycle() {
 			select {
 			case <-commitTicker.C:
 				if r.State == Leader {
-					count := 0
-					for _, index := range r.MathchIndex {
-						if index >= r.CommitIndex+1 {
-							count++
-						}
-					}
-					if count > config.ClusterMeta.LiveNum/2 {
+					if config.ClusterMeta.LiveNum == 1 {
 						r.CommitIndex++
 						r.commit(r.CommitIndex - 1)
+					} else {
+						count := 0
+						for _, index := range r.MathchIndex {
+							if index >= r.CommitIndex+1 {
+								count++
+							}
+						}
+						if count >= config.ClusterMeta.LiveNum/2 {
+							r.CommitIndex++
+							r.commit(r.CommitIndex - 1)
+						}
 					}
 				}
 			}
