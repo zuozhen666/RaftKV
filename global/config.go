@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type node struct {
 }
 
 type cluster struct {
+	Mutex        sync.RWMutex
 	LiveNum      int
 	LeaderID     string
 	LeaderKvPort string
@@ -55,8 +57,10 @@ func DaemProcess() {
 				}
 				if len(livePeers)+1 != ClusterMeta.LiveNum {
 					log.Printf("[global]update live peers %v to %v", ClusterMeta.OtherPeers, livePeers)
+					ClusterMeta.Mutex.Lock()
 					ClusterMeta.OtherPeers = livePeers
 					ClusterMeta.LiveNum = len(livePeers) + 1
+					ClusterMeta.Mutex.Unlock()
 					ClusterMeta.GlobalC <- true
 				}
 			}
