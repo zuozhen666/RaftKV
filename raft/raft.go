@@ -38,6 +38,7 @@ type RequestVoteRes struct {
 type AppendEntriesArgs struct {
 	Term         int     `json:"term"`
 	LeaderID     string  `json:"leaderId"`
+	LeaderKvPort string  `json:"leaderkvport"`
 	PrevLogIndex int     `json:"prevLogIndex"`
 	PrevLogTerm  int     `json:"prevLogTerm"`
 	Entries      []Entry `json:"entries"`
@@ -263,6 +264,7 @@ func (r *Raft) sendHeartbeats() {
 				Term:         r.CurrentTerm,
 				LeaderID:     r.ID,
 				LeaderCommit: r.CommitIndex,
+				LeaderKvPort: global.Node.KvPort,
 			}
 			var appendEntriesRes AppendEntriesRes
 			lastIndex := r.getLastIndex()
@@ -331,6 +333,7 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 			appendEntriesRes.Success = true
 			r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
 			global.ClusterMeta.LeaderID = appendEntriesArgs.LeaderID
+			global.ClusterMeta.LeaderKvPort = appendEntriesArgs.LeaderKvPort
 		}
 		return appendEntriesRes
 	}
@@ -347,6 +350,7 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 	log.Printf("[raft module]Node %v receive appendEntriesMsg from leader, current Entry %v", r.ID, r.Entry)
 	r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
 	global.ClusterMeta.LeaderID = appendEntriesArgs.LeaderID
+	global.ClusterMeta.LeaderKvPort = appendEntriesArgs.LeaderKvPort
 	return appendEntriesRes
 }
 
@@ -395,6 +399,7 @@ func (r *Raft) convertToFollower() {
 func (r *Raft) convertToLeader() {
 	log.Printf("[raft module]Node %s converting to Leader", r.ID)
 	r.State = Leader
+	global.ClusterMeta.LeaderID = r.ID
 	for _, peer := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = r.getLastIndex() + 1
 		r.MathchIndex[peer] = -1

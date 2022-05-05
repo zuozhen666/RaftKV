@@ -32,9 +32,7 @@ type cluster struct {
 
 var ClusterMeta cluster
 var Node node
-var client = http.Client{
-	Timeout: time.Millisecond * 500,
-}
+var client = http.Client{}
 
 type test struct {
 	Term int `json:"term"`

@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
 )
 
 type RaftClient struct {
@@ -15,9 +14,7 @@ type RaftClient struct {
 
 func NewRaftClient() *RaftClient {
 	return &RaftClient{
-		httpClient: http.Client{
-			Timeout: time.Millisecond * 500,
-		},
+		httpClient: http.Client{},
 	}
 }
 
