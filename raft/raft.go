@@ -66,10 +66,11 @@ type Raft struct {
 	restartElectionTicker chan int
 	proposeC              <-chan global.Kv
 	commitC               chan<- global.Kv
+	globalC               <-chan bool
 	ptr                   int
 }
 
-func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv,
+func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv, globalC <-chan bool,
 	requestVoteFunc func(peer string, request RequestVoteArgs) (RequestVoteRes, error),
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error),
 ) *Raft {
@@ -86,6 +87,7 @@ func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv,
 		restartElectionTicker: make(chan int, 1),
 		proposeC:              proposeC,
 		commitC:               commitC,
+		globalC:               globalC,
 		ptr:                   -1,
 	}
 	for _, peer := range global.ClusterMeta.OtherPeers {
@@ -101,6 +103,7 @@ func (r *Raft) start() {
 	r.startHeartbeatTicker()
 	go r.readPropose()
 	r.commitCycle()
+	r.listenGlobal()
 }
 
 func (r *Raft) readPropose() {
@@ -152,6 +155,24 @@ func (r *Raft) commitCycle() {
 						if count >= global.ClusterMeta.LiveNum/2 {
 							r.CommitIndex++
 							r.commit(r.CommitIndex - 1)
+						}
+					}
+				}
+			}
+		}
+	}()
+}
+
+func (r *Raft) listenGlobal() {
+	go func() {
+		for {
+			select {
+			case <-r.globalC:
+				if r.State == Leader {
+					for _, peer := range global.ClusterMeta.OtherPeers {
+						if _, ok := r.NextIndex[peer]; !ok {
+							r.NextIndex[peer] = r.getLastIndex() + 1
+							r.MathchIndex[peer] = -1
 						}
 					}
 				}
@@ -275,6 +296,12 @@ func (r *Raft) buildAppendEntriesArgs(appendEntriesArgs *AppendEntriesArgs, next
 }
 
 func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes {
+	// global daem
+	if requestVoteArgs.Term == -1 {
+		return RequestVoteRes{
+			Term: r.CurrentTerm,
+		}
+	}
 	r.updateTermIfNeed(requestVoteArgs.Term)
 	var requestVoteRes = RequestVoteRes{
 		Term: r.CurrentTerm,
@@ -323,15 +350,6 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 	return appendEntriesRes
 }
 
-func (r *Raft) updateCommitIndexIfNeed(leaderCommit int) {
-	if r.getLastIndex() != -1 && r.getLastIndex() >= leaderCommit && r.CommitIndex != leaderCommit {
-		lastCommitIndex := r.CommitIndex
-		r.CommitIndex = leaderCommit
-		log.Printf("[raft module]Node %v update commitIndex %d to %d", r.ID, lastCommitIndex, leaderCommit)
-		r.commit(lastCommitIndex)
-	}
-}
-
 func (r *Raft) isMatch(prevLogIndex, prevLogTerm int) bool {
 	for _, entry := range r.Entry {
 		if prevLogIndex == entry.Index && prevLogTerm == entry.Term {
@@ -339,6 +357,15 @@ func (r *Raft) isMatch(prevLogIndex, prevLogTerm int) bool {
 		}
 	}
 	return false
+}
+
+func (r *Raft) updateCommitIndexIfNeed(leaderCommit int) {
+	if r.getLastIndex() != -1 && r.getLastIndex() >= leaderCommit && r.CommitIndex != leaderCommit {
+		lastCommitIndex := r.CommitIndex
+		r.CommitIndex = leaderCommit
+		log.Printf("[raft module]Node %v update commitIndex %d to %d", r.ID, lastCommitIndex, leaderCommit)
+		r.commit(lastCommitIndex)
+	}
 }
 
 func (r *Raft) updateTermIfNeed(term int) {

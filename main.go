@@ -15,10 +15,14 @@ func main() {
 	}
 	proposeC := make(chan global.Kv)
 	commitC := make(chan global.Kv)
+	globalC := make(chan bool)
 	global.ClusterMeta.LiveNum = len(args[1:])
 	global.ClusterMeta.OtherPeers = args[2:]
+	global.ClusterMeta.MaxPeers = args[2:]
+	global.ClusterMeta.GlobalC = globalC
 	global.Node.KvPort = args[0]
 	global.Node.RaftAddress = args[1]
+	global.DaemProcess()
 	// kv server
 	httpServer := &http.Server{
 		Addr: args[0],
@@ -29,7 +33,7 @@ func main() {
 	go httpServer.ListenAndServe()
 	// raft node
 	client := raft.NewRaftClient()
-	r := raft.NewRaft(args[1], proposeC, commitC, client.RequestVote, client.AppendEntries)
+	r := raft.NewRaft(args[1], proposeC, commitC, globalC, client.RequestVote, client.AppendEntries)
 	server := raft.NewRaftServer(r)
 	server.Start(args[1])
 }
