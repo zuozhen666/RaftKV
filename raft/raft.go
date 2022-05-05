@@ -91,8 +91,8 @@ func NewRaft(id string, peers []string, proposeC <-chan global.Kv, commitC chan<
 		ptr:                   -1,
 	}
 	for _, peer := range r.Peers {
-		r.NextIndex[peer] = 1
-		r.MathchIndex[peer] = 0
+		r.NextIndex[peer] = 0
+		r.MathchIndex[peer] = -1
 	}
 	r.start()
 	return &r
@@ -170,8 +170,10 @@ func (r *Raft) startElectionTicker() {
 		for {
 			select {
 			case <-electionTicker.C:
-				log.Printf("[raft module]Node %v election time out", r.ID)
-				r.handleElectionTimeout()
+				if r.State != Leader {
+					log.Printf("[raft module]Node %v election time out", r.ID)
+					r.handleElectionTimeout()
+				}
 			case <-r.restartElectionTicker:
 				go r.startElectionTicker()
 				return
@@ -193,9 +195,6 @@ func (r *Raft) startHeartbeatTicker() {
 }
 
 func (r *Raft) handleElectionTimeout() {
-	if r.State == Leader {
-		return
-	}
 	log.Printf("[raft module]Node: %s HandleElectionTimeout", r.ID)
 	r.convertToCandidate()
 	r.startElection()
@@ -353,7 +352,7 @@ func (r *Raft) convertToLeader() {
 	r.State = Leader
 	for _, peer := range r.Peers {
 		r.NextIndex[peer] = r.getLastIndex() + 1
-		r.MathchIndex[peer] = 0
+		r.MathchIndex[peer] = -1
 	}
 	r.sendHeartbeats()
 }
