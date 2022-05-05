@@ -241,23 +241,27 @@ func (r *Raft) sendHeartbeats() {
 	for _, peer := range r.Peers {
 		go func(peer string) {
 			var appendEntriesArgs = AppendEntriesArgs{
-				Term:     r.CurrentTerm,
-				LeaderID: r.ID,
+				Term:         r.CurrentTerm,
+				LeaderID:     r.ID,
+				LeaderCommit: r.CommitIndex,
 			}
 			var appendEntriesRes AppendEntriesRes
 			lastIndex := r.getLastIndex()
-			if r.MathchIndex[peer] == lastIndex || lastIndex == -1 {
+			if r.MathchIndex[peer] == lastIndex {
 				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
-				log.Printf("[raft module]Node %v appendEntries to Node %v", r.ID, peer)
+				log.Printf("[raft module]Node %v send heartbeat to Node %v", r.ID, peer)
 				r.updateTermIfNeed(appendEntriesRes.Term)
 			} else {
 				r.buildAppendEntriesArgs(&appendEntriesArgs, r.NextIndex[peer])
 				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
+				log.Printf("[raft module]Node %v appendEntries to Node %v, Entries: %v", r.ID, peer, appendEntriesArgs.Entries)
 				for !appendEntriesRes.Success {
 					r.NextIndex[peer]--
 					r.buildAppendEntriesArgs(&appendEntriesArgs, r.NextIndex[peer])
 					appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
+					log.Printf("[raft module]Node %v appendEntries(retry) to Node %v, Entries: %v", r.ID, peer, appendEntriesArgs.Entries)
 				}
+				r.NextIndex[peer] = appendEntriesArgs.Entries[len(appendEntriesArgs.Entries)-1].Index + 1
 				r.MathchIndex[peer] = r.NextIndex[peer] - 1
 			}
 		}(peer)
@@ -265,9 +269,11 @@ func (r *Raft) sendHeartbeats() {
 }
 
 func (r *Raft) buildAppendEntriesArgs(appendEntriesArgs *AppendEntriesArgs, nextIndex int) {
-	appendEntriesArgs.PrevLogIndex = r.Entry[nextIndex-2].Index
-	appendEntriesArgs.PrevLogTerm = r.Entry[nextIndex-2].Term
-	appendEntriesArgs.Entries = r.Entry[:appendEntriesArgs.PrevLogIndex]
+	if nextIndex != 0 {
+		appendEntriesArgs.PrevLogIndex = r.Entry[nextIndex-1].Index
+		appendEntriesArgs.PrevLogTerm = r.Entry[nextIndex-1].Term
+	}
+	appendEntriesArgs.Entries = r.Entry[nextIndex:]
 }
 
 func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes {
@@ -293,23 +299,37 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 		Term: r.CurrentTerm,
 	}
 	if appendEntriesArgs.Entries == nil {
-		appendEntriesRes.Success = r.CurrentTerm <= appendEntriesArgs.Term
+		// heartbeat
+		if r.CurrentTerm > appendEntriesArgs.Term {
+			appendEntriesRes.Success = false
+		} else {
+			appendEntriesRes.Success = true
+			r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
+			global.ClusterMeta.LeaderID = appendEntriesArgs.LeaderID
+		}
 		return appendEntriesRes
 	}
-	if !r.isMatch(appendEntriesArgs.PrevLogIndex, appendEntriesArgs.PrevLogTerm) {
+	if r.getLastIndex() != -1 && !r.isMatch(appendEntriesArgs.PrevLogIndex, appendEntriesArgs.PrevLogTerm) {
 		appendEntriesRes.Success = false
 		return appendEntriesRes
 	}
-	r.Entry = append(r.Entry[:appendEntriesArgs.PrevLogIndex], appendEntriesArgs.Entries...)
+	if r.getLastIndex() != -1 {
+		r.Entry = append(r.Entry[:appendEntriesArgs.PrevLogIndex+1], appendEntriesArgs.Entries...)
+	} else {
+		r.Entry = append(r.Entry, appendEntriesArgs.Entries...)
+	}
+	appendEntriesRes.Success = true
+	log.Printf("[raft module]Node %v receive appendEntriesMsg from leader, current Entry %v", r.ID, r.Entry)
 	r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
 	global.ClusterMeta.LeaderID = appendEntriesArgs.LeaderID
 	return appendEntriesRes
 }
 
 func (r *Raft) updateCommitIndexIfNeed(leaderCommit int) {
-	if r.getLastIndex() >= leaderCommit {
+	if r.getLastIndex() != -1 && r.getLastIndex() >= leaderCommit && r.CommitIndex != leaderCommit {
 		lastCommitIndex := r.CommitIndex
 		r.CommitIndex = leaderCommit
+		log.Printf("[raft module]Node %v update commitIndex %d to %d", r.ID, r.CommitIndex, leaderCommit)
 		r.commit(lastCommitIndex)
 	}
 }
