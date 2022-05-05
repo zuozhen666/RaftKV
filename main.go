@@ -26,7 +26,7 @@ func main() {
 	go httpServer.ListenAndServe()
 	// raft node
 	global.ClusterMeta.LiveNum = len(args[1:])
-	log.Printf("Cluster Live node: %v", args[1:])
+	log.Printf("[global]Cluster Live node: %v", args[1:])
 	client := raft.NewRaftClient()
 	r := raft.NewRaft(args[1], args[2:], proposeC, commitC, client.RequestVote, client.AppendEntries)
 	server := raft.NewRaftServer(r)

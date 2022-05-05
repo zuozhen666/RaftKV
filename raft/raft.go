@@ -165,12 +165,12 @@ func (r *Raft) commitCycle() {
 func (r *Raft) startElectionTicker() {
 	randInt := rand.Int()%1000 + 4000
 	electionTicker := time.NewTicker(time.Duration(randInt) * time.Millisecond)
-	log.Printf("reset electionTimeout: %v Millisecond\n", randInt)
+	log.Printf("[raft module]reset electionTimeout: %v Millisecond", randInt)
 	go func() {
 		for {
 			select {
 			case <-electionTicker.C:
-				log.Printf("Node %v election time out\n", r.ID)
+				log.Printf("[raft module]Node %v election time out", r.ID)
 				r.handleElectionTimeout()
 			case <-r.restartElectionTicker:
 				go r.startElectionTicker()
@@ -196,13 +196,13 @@ func (r *Raft) handleElectionTimeout() {
 	if r.State == Leader {
 		return
 	}
-	log.Printf("Node: %s HandleElectionTimeout\n", r.ID)
+	log.Printf("[raft module]Node: %s HandleElectionTimeout", r.ID)
 	r.convertToCandidate()
 	r.startElection()
 }
 
 func (r *Raft) startElection() {
-	log.Printf("Node %s start election", r.ID)
+	log.Printf("[raft module]Node %s start election", r.ID)
 	r.CurrentTerm++
 	r.VotedFor = r.ID
 	var votesGranted = 1
@@ -215,9 +215,9 @@ func (r *Raft) startElection() {
 		}
 		requestVoteRes, err := r.requestVoteFunc(peer, requestVoteArgs)
 		if err != nil {
-			log.Printf("Request vote to peer %v err: %v\n", peer, err)
+			log.Printf("[raft module]Request vote to peer %v err: %v", peer, err)
 		} else {
-			log.Printf("CurrentTerm = %v, reveiceRes = %v\n", r.CurrentTerm, requestVoteRes)
+			log.Printf("[raft module]CurrentTerm = %v, reveiceRes = %v", r.CurrentTerm, requestVoteRes)
 			r.updateTermIfNeed(requestVoteRes.Term)
 			if r.State != Candidate {
 				return
@@ -228,10 +228,10 @@ func (r *Raft) startElection() {
 		}
 	}
 	if votesGranted > global.ClusterMeta.LiveNum/2 {
-		log.Printf("Node %v granted majority of votes %v of %v", r.ID, votesGranted, global.ClusterMeta.LiveNum)
+		log.Printf("[raft module]Node %v granted majority of votes %v of %v", r.ID, votesGranted, global.ClusterMeta.LiveNum)
 		r.convertToLeader()
 	} else {
-		log.Printf("Node %v loose election, get votes %v of %v", r.ID, votesGranted, global.ClusterMeta.LiveNum)
+		log.Printf("[raft module]Node %v loose election, get votes %v of %v", r.ID, votesGranted, global.ClusterMeta.LiveNum)
 	}
 }
 
@@ -249,7 +249,7 @@ func (r *Raft) sendHeartbeats() {
 			lastIndex := r.getLastIndex()
 			if r.MathchIndex[peer] == lastIndex || lastIndex == -1 {
 				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
-				log.Printf("Node %v appendEntries to Node %v\n", r.ID, peer)
+				log.Printf("[raft module]Node %v appendEntries to Node %v", r.ID, peer)
 				r.updateTermIfNeed(appendEntriesRes.Term)
 			} else {
 				r.buildAppendEntriesArgs(&appendEntriesArgs, r.NextIndex[peer])
@@ -288,7 +288,7 @@ func (r *Raft) HandleRequestVote(requestVoteArgs RequestVoteArgs) RequestVoteRes
 
 func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEntriesRes {
 	r.updateTermIfNeed(appendEntriesArgs.Term)
-	log.Printf("Node: %v receive appendEntriesMsg from Node: %v\n", r.ID, appendEntriesArgs.LeaderID)
+	log.Printf("[raft module]Node: %v receive appendEntriesMsg from Node: %v", r.ID, appendEntriesArgs.LeaderID)
 	r.resetElectionTimer()
 	var appendEntriesRes = AppendEntriesRes{
 		Term: r.CurrentTerm,
@@ -303,6 +303,7 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 	}
 	r.Entry = append(r.Entry[:appendEntriesArgs.PrevLogIndex], appendEntriesArgs.Entries...)
 	r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
+	global.ClusterMeta.LeaderID = appendEntriesArgs.LeaderID
 	return appendEntriesRes
 }
 
@@ -325,30 +326,30 @@ func (r *Raft) isMatch(prevLogIndex, prevLogTerm int) bool {
 
 func (r *Raft) updateTermIfNeed(term int) {
 	if r.CurrentTerm < term {
-		log.Printf("Node %v update term %v to %v", r.ID, r.CurrentTerm, term)
+		log.Printf("[raft module]Node %v update term %v to %v", r.ID, r.CurrentTerm, term)
 		r.CurrentTerm = term
 		r.convertToFollower()
 	}
 }
 
 func (r *Raft) resetElectionTimer() {
-	log.Printf("Node %s resetElectionTimer", r.ID)
+	log.Printf("[raft module]Node %s resetElectionTimer", r.ID)
 	r.restartElectionTicker <- 1
 }
 
 func (r *Raft) convertToCandidate() {
-	log.Printf("Node %s converting to Candidate", r.ID)
+	log.Printf("[raft module]Node %s converting to Candidate", r.ID)
 	r.State = Candidate
 	r.resetElectionTimer()
 }
 func (r *Raft) convertToFollower() {
-	log.Printf("Node %s converting to Follower", r.ID)
+	log.Printf("[raft module]Node %s converting to Follower", r.ID)
 	r.State = Follower
 	r.VotedFor = ""
 	r.resetElectionTimer()
 }
 func (r *Raft) convertToLeader() {
-	log.Printf("Node %s converting to Leader", r.ID)
+	log.Printf("[raft module]Node %s converting to Leader", r.ID)
 	r.State = Leader
 	for _, peer := range r.Peers {
 		r.NextIndex[peer] = r.getLastIndex() + 1
