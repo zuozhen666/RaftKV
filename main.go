@@ -16,17 +16,18 @@ func main() {
 	}
 	proposeC := make(chan config.Kv)
 	commitC := make(chan config.Kv)
+	// kv server
 	httpServer := &http.Server{
 		Addr: args[0],
 		Handler: &kvserver.KvServer{
 			Store: kvserver.NewKvStore(proposeC, commitC),
 		},
 	}
-	err := httpServer.ListenAndServe()
-	log.Println(err)
-	client := raft.NewRaftClient()
+	go httpServer.ListenAndServe()
+	// raft node
 	config.ClusterMeta.LiveNum = len(args[1:])
 	log.Printf("Cluster Live node: %v", args[1:])
+	client := raft.NewRaftClient()
 	r := raft.NewRaft(args[1], args[2:], proposeC, commitC, client.RequestVote, client.AppendEntries)
 	server := raft.NewRaftServer(r)
 	server.Start(args[1])
