@@ -334,8 +334,10 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 		} else {
 			appendEntriesRes.Success = true
 			r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
+			global.ClusterMeta.Mutex.Lock()
 			global.ClusterMeta.LeaderID = appendEntriesArgs.LeaderID
 			global.ClusterMeta.LeaderKvPort = appendEntriesArgs.LeaderKvPort
+			global.ClusterMeta.Mutex.Unlock()
 		}
 		return appendEntriesRes
 	}
@@ -351,8 +353,10 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 	appendEntriesRes.Success = true
 	log.Printf("[raft module]Node %v receive appendEntriesMsg from leader, current Entry %v", r.ID, r.Entry)
 	r.updateCommitIndexIfNeed(appendEntriesArgs.LeaderCommit)
+	global.ClusterMeta.Mutex.Lock()
 	global.ClusterMeta.LeaderID = appendEntriesArgs.LeaderID
 	global.ClusterMeta.LeaderKvPort = appendEntriesArgs.LeaderKvPort
+	global.ClusterMeta.Mutex.Unlock()
 	return appendEntriesRes
 }
 
