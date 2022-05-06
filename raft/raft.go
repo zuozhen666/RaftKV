@@ -144,6 +144,7 @@ func (r *Raft) commitCycle() {
 						if r.getLastIndex() > r.CommitIndex {
 							lastCommitIndex := r.CommitIndex
 							r.CommitIndex = r.getLastIndex()
+							log.Printf("[raft module]leader update commit index %d to %d", lastCommitIndex, r.CommitIndex)
 							r.commit(lastCommitIndex)
 						}
 					} else {
@@ -154,6 +155,7 @@ func (r *Raft) commitCycle() {
 							}
 						}
 						if count >= global.ClusterMeta.LiveNum/2 {
+							log.Printf("[raft module]leader update commit index %d to %d", r.CommitIndex, r.CommitIndex+1)
 							r.CommitIndex++
 							r.commit(r.CommitIndex - 1)
 						}
@@ -388,23 +390,35 @@ func (r *Raft) resetElectionTimer() {
 func (r *Raft) convertToCandidate() {
 	log.Printf("[raft module]Node %s converting to Candidate", r.ID)
 	r.State = Candidate
+	r.resetClusterLeaderInfo()
 	r.resetElectionTimer()
 }
 func (r *Raft) convertToFollower() {
 	log.Printf("[raft module]Node %s converting to Follower", r.ID)
 	r.State = Follower
 	r.VotedFor = ""
+	r.resetClusterLeaderInfo()
 	r.resetElectionTimer()
 }
 func (r *Raft) convertToLeader() {
 	log.Printf("[raft module]Node %s converting to Leader", r.ID)
 	r.State = Leader
+	global.ClusterMeta.Mutex.Lock()
 	global.ClusterMeta.LeaderID = r.ID
+	global.ClusterMeta.LeaderKvPort = global.Node.KvPort
+	global.ClusterMeta.Mutex.Unlock()
 	for _, peer := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = r.getLastIndex() + 1
 		r.MathchIndex[peer] = -1
 	}
 	r.sendHeartbeats()
+}
+
+func (r *Raft) resetClusterLeaderInfo() {
+	global.ClusterMeta.Mutex.Lock()
+	global.ClusterMeta.LeaderID = ""
+	global.ClusterMeta.LeaderKvPort = ""
+	global.ClusterMeta.Mutex.Unlock()
 }
 
 func (r *Raft) getLastIndex() int {

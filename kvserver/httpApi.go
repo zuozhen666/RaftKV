@@ -11,6 +11,10 @@ type KvServer struct {
 }
 
 func (kv *KvServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if global.ClusterMeta.LeaderKvPort == "" {
+		http.Error(w, "there is no leader in current cluster，please request later", http.StatusBadRequest)
+		return
+	}
 	if global.Node.KvPort != global.ClusterMeta.LeaderKvPort {
 		http.Error(w, "please request leader node: localhost"+global.ClusterMeta.LeaderKvPort, http.StatusBadRequest)
 		return
