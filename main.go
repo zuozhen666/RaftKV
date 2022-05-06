@@ -17,8 +17,11 @@ func main() {
 	commitC := make(chan global.Kv)
 	globalC := make(chan bool)
 	global.ClusterMeta.LiveNum = len(args[1:])
-	global.ClusterMeta.OtherPeers = args[2:]
-	global.ClusterMeta.MaxPeers = args[2:]
+	global.ClusterMeta.OtherPeers = make(map[string]struct{})
+	for _, peer := range args[2:] {
+		global.ClusterMeta.OtherPeers[peer] = struct{}{}
+	}
+	global.ClusterMeta.MaxPeers = global.ClusterMeta.OtherPeers
 	global.ClusterMeta.GlobalC = globalC
 	global.Node.KvPort = args[0]
 	global.Node.RaftAddress = args[1]

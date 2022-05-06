@@ -26,8 +26,8 @@ type cluster struct {
 	LeaderID     string
 	LeaderKvPort string
 	GlobalC      chan<- bool
-	OtherPeers   []string
-	MaxPeers     []string
+	OtherPeers   map[string]struct{}
+	MaxPeers     map[string]struct{}
 }
 
 var ClusterMeta cluster
@@ -44,13 +44,13 @@ func DaemProcess() {
 		for {
 			select {
 			case <-ticker.C:
-				livePeers := make([]string, 0)
+				livePeers := make(map[string]struct{})
 				reqJson, _ := json.Marshal(test{
 					Term: -1,
 				})
-				for _, peer := range ClusterMeta.MaxPeers {
+				for peer, _ := range ClusterMeta.MaxPeers {
 					if _, err := client.Post("http://"+peer+"/raft/request-vote", "application/json", bytes.NewBuffer(reqJson)); err == nil {
-						livePeers = append(livePeers, peer)
+						livePeers[peer] = struct{}{}
 					}
 				}
 				if len(livePeers)+1 != ClusterMeta.LiveNum {

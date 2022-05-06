@@ -91,10 +91,12 @@ func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv, glo
 		globalC:               globalC,
 		ptr:                   -1,
 	}
-	for _, peer := range global.ClusterMeta.OtherPeers {
+	global.ClusterMeta.Mutex.RLock()
+	for peer, _ := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = 0
 		r.MathchIndex[peer] = -1
 	}
+	global.ClusterMeta.Mutex.RUnlock()
 	r.start()
 	return &r
 }
@@ -140,6 +142,7 @@ func (r *Raft) commitCycle() {
 			select {
 			case <-commitTicker.C:
 				if r.State == Leader {
+					global.ClusterMeta.Mutex.RLock()
 					if global.ClusterMeta.LiveNum == 1 {
 						if r.getLastIndex() > r.CommitIndex {
 							lastCommitIndex := r.CommitIndex
@@ -160,6 +163,7 @@ func (r *Raft) commitCycle() {
 							r.commit(r.CommitIndex - 1)
 						}
 					}
+					global.ClusterMeta.Mutex.RUnlock()
 				}
 			}
 		}
@@ -172,12 +176,20 @@ func (r *Raft) listenGlobal() {
 			select {
 			case <-r.globalC:
 				if r.State == Leader {
-					for _, peer := range global.ClusterMeta.OtherPeers {
+					global.ClusterMeta.Mutex.RLock()
+					for peer, _ := range r.NextIndex {
+						if _, ok := global.ClusterMeta.OtherPeers[peer]; !ok {
+							delete(r.NextIndex, peer)
+							delete(r.MathchIndex, peer)
+						}
+					}
+					for peer, _ := range global.ClusterMeta.OtherPeers {
 						if _, ok := r.NextIndex[peer]; !ok {
 							r.NextIndex[peer] = r.getLastIndex() + 1
 							r.MathchIndex[peer] = -1
 						}
 					}
+					global.ClusterMeta.Mutex.RUnlock()
 				}
 			}
 		}
@@ -227,7 +239,8 @@ func (r *Raft) startElection() {
 	r.CurrentTerm++
 	r.VotedFor = r.ID
 	var votesGranted = 1
-	for _, peer := range global.ClusterMeta.OtherPeers {
+	global.ClusterMeta.Mutex.RLock()
+	for peer, _ := range global.ClusterMeta.OtherPeers {
 		requestVoteArgs := RequestVoteArgs{
 			Term:         r.CurrentTerm,
 			CandidateID:  r.ID,
@@ -248,6 +261,7 @@ func (r *Raft) startElection() {
 			}
 		}
 	}
+	global.ClusterMeta.Mutex.RUnlock()
 	if votesGranted > global.ClusterMeta.LiveNum/2 {
 		log.Printf("[raft module]Node %v granted majority of votes %v of %v", r.ID, votesGranted, global.ClusterMeta.LiveNum)
 		r.convertToLeader()
@@ -260,7 +274,8 @@ func (r *Raft) sendHeartbeats() {
 	if r.State != Leader {
 		return
 	}
-	for _, peer := range global.ClusterMeta.OtherPeers {
+	global.ClusterMeta.Mutex.RLock()
+	for peer, _ := range global.ClusterMeta.OtherPeers {
 		go func(peer string) {
 			var appendEntriesArgs = AppendEntriesArgs{
 				Term:         r.CurrentTerm,
@@ -284,11 +299,16 @@ func (r *Raft) sendHeartbeats() {
 					appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
 					log.Printf("[raft module]Node %v appendEntries(retry) to Node %v, Entries: %v", r.ID, peer, appendEntriesArgs.Entries)
 				}
-				r.NextIndex[peer] = appendEntriesArgs.Entries[len(appendEntriesArgs.Entries)-1].Index + 1
+				if len(appendEntriesArgs.Entries) == 0 {
+					r.NextIndex[peer] = r.getLastIndex() + 1
+				} else {
+					r.NextIndex[peer] = appendEntriesArgs.Entries[len(appendEntriesArgs.Entries)-1].Index + 1
+				}
 				r.MathchIndex[peer] = r.NextIndex[peer] - 1
 			}
 		}(peer)
 	}
+	global.ClusterMeta.Mutex.RUnlock()
 }
 
 func (r *Raft) buildAppendEntriesArgs(appendEntriesArgs *AppendEntriesArgs, nextIndex int) {
@@ -411,7 +431,7 @@ func (r *Raft) convertToLeader() {
 	global.ClusterMeta.LeaderID = r.ID
 	global.ClusterMeta.LeaderKvPort = global.Node.KvPort
 	global.ClusterMeta.Mutex.Unlock()
-	for _, peer := range global.ClusterMeta.OtherPeers {
+	for peer, _ := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = r.getLastIndex() + 1
 		r.MathchIndex[peer] = -1
 	}
