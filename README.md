@@ -7,6 +7,7 @@
 - [ ] 整合完善系统
 
 ## ToDo
-- [ ] 新leader节点被选举出来后的log replication bug
+- [x] 新leader节点被选举出来后的log replication bug
+- [ ] 新加入节点的log replication bug
 - [ ] kv server到raft module的同步问题
 - [ ] 对leader添加新的日志类型-广播集群新成员添加

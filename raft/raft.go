@@ -59,7 +59,7 @@ type Raft struct {
 	CommitIndex int
 	LastApplied int
 	NextIndex   map[string]int
-	MathchIndex map[string]int
+	MatchIndex  map[string]int
 
 	requestVoteFunc   func(peer string, request RequestVoteArgs) (RequestVoteRes, error)
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error)
@@ -82,7 +82,7 @@ func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv, glo
 		Entry:                 make([]Entry, 0),
 		CommitIndex:           -1,
 		NextIndex:             make(map[string]int),
-		MathchIndex:           make(map[string]int),
+		MatchIndex:            make(map[string]int),
 		requestVoteFunc:       requestVoteFunc,
 		appendEntriesFunc:     appendEntriesFunc,
 		restartElectionTicker: make(chan int, 1),
@@ -94,7 +94,7 @@ func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv, glo
 	global.ClusterMeta.Mutex.RLock()
 	for peer, _ := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = 0
-		r.MathchIndex[peer] = -1
+		r.MatchIndex[peer] = -1
 	}
 	global.ClusterMeta.Mutex.RUnlock()
 	r.start()
@@ -136,12 +136,13 @@ func (r *Raft) commit(lastCommitIndex int) {
 }
 
 func (r *Raft) commitCycle() {
-	commitTicker := time.NewTicker(1 * time.Second)
+	commitTicker := time.NewTicker(5 * time.Second)
 	go func() {
 		for {
 			select {
 			case <-commitTicker.C:
 				if r.State == Leader {
+					log.Printf("[raft module]current info r.NextIndex = %v, r.MatchIndex = %v", r.NextIndex, r.MatchIndex)
 					global.ClusterMeta.Mutex.RLock()
 					if global.ClusterMeta.LiveNum == 1 {
 						if r.getLastIndex() > r.CommitIndex {
@@ -152,7 +153,7 @@ func (r *Raft) commitCycle() {
 						}
 					} else {
 						count := 0
-						for _, index := range r.MathchIndex {
+						for _, index := range r.MatchIndex {
 							if index >= r.CommitIndex+1 {
 								count++
 							}
@@ -177,16 +178,17 @@ func (r *Raft) listenGlobal() {
 			case <-r.globalC:
 				if r.State == Leader {
 					global.ClusterMeta.Mutex.RLock()
+					log.Println("[raft module]receive global cluster change, update NextIndex and MatchIndex")
 					for peer, _ := range r.NextIndex {
 						if _, ok := global.ClusterMeta.OtherPeers[peer]; !ok {
 							delete(r.NextIndex, peer)
-							delete(r.MathchIndex, peer)
+							delete(r.MatchIndex, peer)
 						}
 					}
 					for peer, _ := range global.ClusterMeta.OtherPeers {
 						if _, ok := r.NextIndex[peer]; !ok {
 							r.NextIndex[peer] = r.getLastIndex() + 1
-							r.MathchIndex[peer] = -1
+							r.MatchIndex[peer] = -1
 						}
 					}
 					global.ClusterMeta.Mutex.RUnlock()
@@ -285,7 +287,7 @@ func (r *Raft) sendHeartbeats() {
 			}
 			var appendEntriesRes AppendEntriesRes
 			lastIndex := r.getLastIndex()
-			if r.MathchIndex[peer] == lastIndex {
+			if r.MatchIndex[peer] == lastIndex {
 				appendEntriesRes, _ = r.appendEntriesFunc(peer, appendEntriesArgs)
 				log.Printf("[raft module]Node %v send heartbeat to Node %v", r.ID, peer)
 				r.updateTermIfNeed(appendEntriesRes.Term)
@@ -304,7 +306,7 @@ func (r *Raft) sendHeartbeats() {
 				} else {
 					r.NextIndex[peer] = appendEntriesArgs.Entries[len(appendEntriesArgs.Entries)-1].Index + 1
 				}
-				r.MathchIndex[peer] = r.NextIndex[peer] - 1
+				r.MatchIndex[peer] = r.NextIndex[peer] - 1
 			}
 		}(peer)
 	}
@@ -427,13 +429,16 @@ func (r *Raft) convertToFollower() {
 func (r *Raft) convertToLeader() {
 	log.Printf("[raft module]Node %s converting to Leader", r.ID)
 	r.State = Leader
+	r.ptr = len(r.Entry) - 1
 	global.ClusterMeta.Mutex.Lock()
 	global.ClusterMeta.LeaderID = r.ID
 	global.ClusterMeta.LeaderKvPort = global.Node.KvPort
 	global.ClusterMeta.Mutex.Unlock()
+	r.NextIndex = make(map[string]int)
+	r.MatchIndex = make(map[string]int)
 	for peer, _ := range global.ClusterMeta.OtherPeers {
 		r.NextIndex[peer] = r.getLastIndex() + 1
-		r.MathchIndex[peer] = -1
+		r.MatchIndex[peer] = -1
 	}
 	r.sendHeartbeats()
 }

@@ -39,7 +39,7 @@ type test struct {
 }
 
 func DaemProcess() {
-	ticker := time.NewTicker(6 * time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	go func() {
 		for {
 			select {
@@ -58,8 +58,8 @@ func DaemProcess() {
 					ClusterMeta.Mutex.Lock()
 					ClusterMeta.OtherPeers = livePeers
 					ClusterMeta.LiveNum = len(livePeers) + 1
-					ClusterMeta.Mutex.Unlock()
 					ClusterMeta.GlobalC <- true
+					ClusterMeta.Mutex.Unlock()
 				}
 			}
 		}
