@@ -317,6 +317,8 @@ func (r *Raft) buildAppendEntriesArgs(appendEntriesArgs *AppendEntriesArgs, next
 	if nextIndex != 0 {
 		appendEntriesArgs.PrevLogIndex = r.Entry[nextIndex-1].Index
 		appendEntriesArgs.PrevLogTerm = r.Entry[nextIndex-1].Term
+	} else {
+		appendEntriesArgs.PrevLogIndex = -1
 	}
 	appendEntriesArgs.Entries = r.Entry[nextIndex:]
 }
@@ -361,6 +363,10 @@ func (r *Raft) HandleAppendEntries(appendEntriesArgs AppendEntriesArgs) AppendEn
 			global.ClusterMeta.LeaderKvPort = appendEntriesArgs.LeaderKvPort
 			global.ClusterMeta.Mutex.Unlock()
 		}
+		return appendEntriesRes
+	}
+	if r.getLastIndex() == -1 && appendEntriesArgs.PrevLogIndex != -1 {
+		appendEntriesRes.Success = false
 		return appendEntriesRes
 	}
 	if r.getLastIndex() != -1 && !r.isMatch(appendEntriesArgs.PrevLogIndex, appendEntriesArgs.PrevLogTerm) {
