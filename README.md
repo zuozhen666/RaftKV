@@ -10,5 +10,5 @@
 - [x] 新leader节点被选举出来后的log replication bug
 - [x] 新加入节点的log replication bug
 - [X] 测试一下5个节点的cluster行为
-- [ ] kv server到raft module的同步问题
+- [X] kv server到raft module的同步问题
 - [ ] 对leader添加新的日志类型-广播集群新成员添加

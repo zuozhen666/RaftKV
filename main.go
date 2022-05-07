@@ -14,7 +14,7 @@ func main() {
 		panic("args not fail")
 	}
 	proposeC := make(chan global.Kv)
-	commitC := make(chan global.Kv)
+	commitC := make(chan global.Commit)
 	globalC := make(chan bool)
 	global.ClusterMeta.LiveNum = len(args[1:])
 	global.ClusterMeta.OtherPeers = make(map[string]struct{})

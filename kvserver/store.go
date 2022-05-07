@@ -9,10 +9,10 @@ import (
 type KvStore struct {
 	data     map[string]string
 	proposeC chan<- global.Kv
-	commitC  <-chan global.Kv
+	commitC  <-chan global.Commit
 }
 
-func NewKvStore(proposeC chan<- global.Kv, commitC <-chan global.Kv) *KvStore {
+func NewKvStore(proposeC chan<- global.Kv, commitC <-chan global.Commit) *KvStore {
 	kv := &KvStore{
 		data:     make(map[string]string),
 		proposeC: proposeC,
@@ -25,12 +25,13 @@ func NewKvStore(proposeC chan<- global.Kv, commitC <-chan global.Kv) *KvStore {
 func (kv *KvStore) readCommit() {
 	for commit := range kv.commitC {
 		log.Printf("[kvserver]receive commit request %v from raft module", commit)
-		switch commit.Op {
+		switch commit.Kv.Op {
 		case "put":
-			kv.data[commit.Key] = commit.Val
+			kv.data[commit.Kv.Key] = commit.Kv.Val
 		case "delete":
-			delete(kv.data, commit.Key)
+			delete(kv.data, commit.Kv.Key)
 		}
+		commit.WG.Done()
 	}
 }
 

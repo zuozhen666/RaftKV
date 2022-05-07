@@ -20,6 +20,11 @@ type node struct {
 	RaftAddress string
 }
 
+type Commit struct {
+	Kv Kv
+	WG *sync.WaitGroup
+}
+
 type cluster struct {
 	Mutex        sync.RWMutex
 	LiveNum      int

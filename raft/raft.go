@@ -4,6 +4,7 @@ import (
 	"RaftKV/global"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -66,12 +67,12 @@ type Raft struct {
 
 	restartElectionTicker chan int
 	proposeC              <-chan global.Kv
-	commitC               chan<- global.Kv
+	commitC               chan<- global.Commit
 	globalC               <-chan bool
 	ptr                   int
 }
 
-func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Kv, globalC <-chan bool,
+func NewRaft(id string, proposeC <-chan global.Kv, commitC chan<- global.Commit, globalC <-chan bool,
 	requestVoteFunc func(peer string, request RequestVoteArgs) (RequestVoteRes, error),
 	appendEntriesFunc func(peer string, request AppendEntriesArgs) (AppendEntriesRes, error),
 ) *Raft {
@@ -126,11 +127,19 @@ func (r *Raft) readPropose() {
 func (r *Raft) commit(lastCommitIndex int) {
 	log.Printf("[raft module]reach a consensus, commit %v", r.Entry[lastCommitIndex+1:r.CommitIndex+1])
 	for lastCommitIndex < r.CommitIndex {
-		r.commitC <- global.Kv{
-			Key: r.Entry[lastCommitIndex+1].Key,
-			Val: r.Entry[lastCommitIndex+1].Value,
-			Op:  r.Entry[lastCommitIndex+1].Op,
+		commit := global.Commit{
+			Kv: global.Kv{
+				Key: r.Entry[lastCommitIndex+1].Key,
+				Val: r.Entry[lastCommitIndex+1].Value,
+				Op:  r.Entry[lastCommitIndex+1].Op,
+			},
+			WG: &sync.WaitGroup{},
 		}
+		commit.WG.Add(1)
+		r.commitC <- commit
+		commit.WG.Wait()
+		log.Printf("[raft module]apply entry %v to state machine", r.Entry[lastCommitIndex+1])
+		r.LastApplied = lastCommitIndex + 1
 		lastCommitIndex++
 	}
 }
