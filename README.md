@@ -9,5 +9,7 @@
 > 通过goreman run start raftKV1、goreman run stop raftKV1来控制进程
 ## 系统访问
 > curl -L localhost:12100/key -XPUT -d value    // 添加新的key-value pair
+
 > curl -L localhost:12100/key                   // 获取key的value
+
 > curl -L localhost:12100/key -XDELETE          // 删除key
