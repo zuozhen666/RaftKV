@@ -4,9 +4,11 @@ import (
 	"RaftKV/global"
 	"errors"
 	"log"
+	"sync"
 )
 
 type KvStore struct {
+	mu       sync.Mutex
 	data     map[string]string
 	proposeC chan<- global.Kv
 	commitC  <-chan global.Commit
@@ -25,12 +27,14 @@ func NewKvStore(proposeC chan<- global.Kv, commitC <-chan global.Commit) *KvStor
 func (kv *KvStore) readCommit() {
 	for commit := range kv.commitC {
 		log.Printf("[kvserver]receive commit request %v from raft module", commit)
+		kv.mu.Lock()
 		switch commit.Kv.Op {
 		case "put":
 			kv.data[commit.Kv.Key] = commit.Kv.Val
 		case "delete":
 			delete(kv.data, commit.Kv.Key)
 		}
+		kv.mu.Unlock()
 		commit.WG.Done()
 	}
 }
