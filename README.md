@@ -1,7 +1,7 @@
 # RaftKV
 ## 代码运行
 ### 方式一
-`./RaftKV :12100 localhost:9091 localhost:9092 localhost:9093`  
+`go run main.go :12100 localhost:9091 localhost:9092 localhost:9093`  
 > :12100为KVServer端口号，localhost:9091为当前节点的raft通信地址，后续ip为集群里其他节点的通信地址  
 ### 方式二
 `goreman start`
