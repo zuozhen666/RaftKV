@@ -151,7 +151,6 @@ func (r *Raft) commitCycle() {
 			select {
 			case <-commitTicker.C:
 				if r.State == Leader {
-					log.Printf("[raft module]current info r.NextIndex = %v, r.MatchIndex = %v", r.NextIndex, r.MatchIndex)
 					global.ClusterMeta.Mutex.RLock()
 					if global.ClusterMeta.LiveNum == 1 {
 						if r.getLastIndex() > r.CommitIndex {
